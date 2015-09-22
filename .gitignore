@@ -1,0 +1,7 @@
+/ChatLib/bin
+/ChatLib/obj
+*.suo
+*.user
+*.psess
+*.vsp
+*.vspx
