@@ -2,11 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
-namespace ChatLib
+namespace ChatLib.Twitch
 {
-    public class IrcMessage
+    class IrcMessage
     {
         public string Tags { get; private set; }
         public string Source { get; private set; }
@@ -83,13 +82,13 @@ namespace ChatLib
         {
             StringBuilder sb = new StringBuilder();
 
-            if (!string.IsNullOrWhiteSpace(Tags))
+            if (!Net40.StringIsNullOrWhiteSpace(Tags))
             {
                 sb.Append("@");
                 sb.Append(Tags);
             }
 
-            if (!string.IsNullOrWhiteSpace(Source))
+            if (!Net40.StringIsNullOrWhiteSpace(Source))
             {
                 if (sb.Length > 0)
                     sb.Append(" ");
@@ -101,13 +100,13 @@ namespace ChatLib
                 sb.Append(" ");
             sb.Append(Command);
 
-            if (!string.IsNullOrWhiteSpace(Parameters))
+            if (!Net40.StringIsNullOrWhiteSpace(Parameters))
             {
                 sb.Append(" ");
                 sb.Append(Parameters);
             }
 
-            if (!string.IsNullOrWhiteSpace(Text))
+            if (!Net40.StringIsNullOrWhiteSpace(Text))
             {
                 sb.Append(" :");
                 sb.Append(Text);

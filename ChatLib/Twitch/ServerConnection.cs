@@ -6,9 +6,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
-namespace ChatLib
+
+namespace ChatLib.Twitch
 {
     class ServerConnection
     {
@@ -89,32 +89,8 @@ namespace ChatLib
                 {
                     // Resolve endpoint
                     IPEndPoint endpoint = servers[i] as IPEndPoint;
-                    if (endpoint == null && servers[i] is DnsEndPoint)
-                    {
-                        IPAddress address;
-                        DnsEndPoint dnsEp = (DnsEndPoint)servers[i];
-                        if (!IPAddress.TryParse(dnsEp.Host, out address))
-                        {
-                            try
-                            {
-                                IPHostEntry entry = Dns.GetHostEntry(dnsEp.Host);
-                                if (entry.AddressList.Length == 0)
-                                    break;
-
-                                address = entry.AddressList[0];
-                            }
-                            catch (SocketException)
-                            {
-                                // DNS error
-                                break;
-                            }
-                        }
-
-                        endpoint = new IPEndPoint(address, dnsEp.Port);
-                    }
-
                     if (endpoint == null)
-                        continue;
+                        continue; // Non-IP endpoint
 
                     // Create new connection
                     connection = new ServerConnection(endpoint, servers[i]);
@@ -301,7 +277,7 @@ namespace ChatLib
                     return;
                 case IrcCommands.PrivateMessage:
                     if (line.Text == "!disconnect")
-                        _socket.Dispose();
+                        _socket.Close();
                     break;
                 case IrcCommands.Part:
                 case IrcCommands.Join:

@@ -9,7 +9,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>ChatLib</RootNamespace>
     <AssemblyName>ChatLib</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
   </PropertyGroup>
@@ -42,11 +42,12 @@
   <ItemGroup>
     <Compile Include="ChatMessage.cs" />
     <Compile Include="ChatServiceFactory.cs" />
-    <Compile Include="ConsoleColorConverter.cs" />
+    <Compile Include="Net40.cs" />
     <Compile Include="EventHandlers.cs" />
-    <Compile Include="IrcCommands.cs" />
-    <Compile Include="IrcMessage.cs" />
-    <Compile Include="ServerConnection.cs" />
+    <Compile Include="Twitch\EventHandlers.cs" />
+    <Compile Include="Twitch\IrcCommands.cs" />
+    <Compile Include="Twitch\IrcMessage.cs" />
+    <Compile Include="Twitch\ServerConnection.cs" />
     <Compile Include="TextRun.cs" />
     <Compile Include="Twitch\TwitchIrcChannel.cs" />
     <Compile Include="Twitch\TwitchIrcService.cs" />

@@ -5,7 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
+
 
 namespace ChatLib.Twitch
 {
@@ -107,7 +107,14 @@ namespace ChatLib.Twitch
         private void JoinWorkerThread(object state)
         {
             // Lookup which servers to connect to for this channel
-            DnsEndPoint[] servers = _service.GetChatServers(_channelName);
+            IPEndPoint[] servers = _service.GetChatServers(_channelName);
+            if(servers == null)
+            {
+                // Could not connect
+                RaiseOnLeave(LeaveReason.Error);
+                return;
+            }
+
             ServerConnection connection = ServerConnection.ConnectServer(servers);
             if (connection == null)
             {
@@ -284,18 +291,18 @@ namespace ChatLib.Twitch
 
                     lock (Console.OutputEncoding)
                     {
-                        ConsoleColor nameColor = ConsoleColor.Gray;
+                        ConsoleColor nameColor = ConsoleColor.DarkGreen;
 
-                        if (!string.IsNullOrEmpty(message.Author.Color))
-                        {
-                            nameColor = ConsoleColorConverter.HexToColor(message.Author.Color.TrimStart('#'));
-                        }
+                        //if (!string.IsNullOrEmpty(message.Author.Color))
+                        //{
+                        //    nameColor = ConsoleColorConverter.HexToColor(message.Author.Color.TrimStart('#'));
+                        //}
 
-                        if (nameColor == ConsoleColor.Gray)
-                        {
-                            if (!_nameColors.TryGetValue(line.Source, out nameColor))
-                                nameColor = _nameColors[line.Source] = ConsoleColorConverter.GetColor();
-                        }
+                        //if (nameColor == ConsoleColor.Gray)
+                        //{
+                        //    if (!_nameColors.TryGetValue(line.Source, out nameColor))
+                        //        nameColor = _nameColors[line.Source] = ConsoleColorConverter.GetColor();
+                        //}
 
                         if (true)
                         {

@@ -5,7 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading.Tasks;
+
 
 namespace ChatLib.Twitch
 {
@@ -74,9 +74,9 @@ namespace ChatLib.Twitch
         }
 
 
-        internal DnsEndPoint[] GetChatServers(string channelName)
+        internal IPEndPoint[] GetChatServers(string channelName)
         {
-            if (string.IsNullOrWhiteSpace(channelName))
+            if (Net40.StringIsNullOrWhiteSpace(channelName))
                 throw new ArgumentNullException("channelName");
 
             string chatPropertyUri = string.Concat(
@@ -102,7 +102,7 @@ namespace ChatLib.Twitch
                 return null;
             }
 
-            DnsEndPoint[] results = null;
+            IPEndPoint[] results = null;
 
             // Reader owns base stream and will dispose it for us
             using (StreamReader reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
@@ -128,7 +128,7 @@ namespace ChatLib.Twitch
 
                 string[] serverList = responseText.Substring(index + 1, (endIndex - index) - 1).Split(',');
 
-                results = new DnsEndPoint[serverList.Length];
+                results = new IPEndPoint[serverList.Length];
                 for (int i = 0; i < serverList.Length; i++)
                 {
                     int portIndex = serverList[i].LastIndexOf(':');
@@ -136,7 +136,14 @@ namespace ChatLib.Twitch
                     string hostname = serverList[i].Remove(portIndex).TrimStart('"');
                     string portString = serverList[i].Substring(portIndex + 1).TrimEnd('"');
 
-                    results[i] = new DnsEndPoint(hostname, int.Parse(portString));
+                    IPAddress hostAddress;
+                    int hostPort;
+
+                    if (!IPAddress.TryParse(hostname, out hostAddress) ||
+                        !int.TryParse(portString, out hostPort))
+                        continue;
+
+                    results[i] = new IPEndPoint(hostAddress, hostPort);
                 }
             }
 
