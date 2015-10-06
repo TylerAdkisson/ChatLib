@@ -10,9 +10,9 @@ using System.Threading;
 
 namespace ChatLib.Twitch
 {
-    class ServerConnection
+    class IrcServerConnection
     {
-        private static Dictionary<EndPoint, ServerConnection> _connectionRegistry;
+        private static Dictionary<EndPoint, IrcServerConnection> _connectionRegistry;
 
         private Socket _socket;
         private Thread _workerThread;
@@ -36,12 +36,12 @@ namespace ChatLib.Twitch
         public event EventHandler OnConnected;
 
 
-        static ServerConnection()
+        static IrcServerConnection()
         {
-            _connectionRegistry = new Dictionary<EndPoint, ServerConnection>();
+            _connectionRegistry = new Dictionary<EndPoint, IrcServerConnection>();
         }
 
-        public ServerConnection(EndPoint serverEndpoint, EndPoint endpoint)
+        public IrcServerConnection(EndPoint serverEndpoint, EndPoint endpoint)
         {
             Destination = endpoint;
             _serverEndpoint = serverEndpoint;
@@ -54,13 +54,13 @@ namespace ChatLib.Twitch
         }
 
 
-        public static ServerConnection ConnectServer(params EndPoint[] servers)
+        public static IrcServerConnection ConnectServer(params EndPoint[] servers)
         {
             if (servers == null)
                 throw new ArgumentNullException("servers");
 
             // Check if we're already connected to one of the servers
-            ServerConnection connection = null;
+            IrcServerConnection connection = null;
 
             for (int i = 0; i < servers.Length; i++)
             {
@@ -93,7 +93,7 @@ namespace ChatLib.Twitch
                         continue; // Non-IP endpoint
 
                     // Create new connection
-                    connection = new ServerConnection(endpoint, servers[i]);
+                    connection = new IrcServerConnection(endpoint, servers[i]);
                     if (connection.Connect())
                     {
                         // Connection successful, return connection
@@ -155,8 +155,8 @@ namespace ChatLib.Twitch
             // Enable IRCv3 tags to get emotes, colors, and etc.
             SendIrcCommand(new IrcMessage("CAP", "REQ :twitch.tv/tags"));
 
-            // Enable join/part messages
-            //SendIrcCommand(new IrcMessage("CAP", "REQ :twitch.tv/membership"));
+            // Enable join/part and user mode messages
+            SendIrcCommand(new IrcMessage("CAP", "REQ :twitch.tv/membership"));
 
             // Enable timeout, host, etc. messages
             SendIrcCommand(new IrcMessage("CAP", "REQ :twitch.tv/commands"));
@@ -282,7 +282,13 @@ namespace ChatLib.Twitch
                 case IrcCommands.Part:
                 case IrcCommands.Join:
                 case IrcCommands.Mode:
+                case IrcCommands.Notice:
                 case IrcCommands.NameReply:
+                    break;
+                //case IrcCommands.ClearChat:
+                    //Console.ForegroundColor = ConsoleColor.DarkCyan;
+                    //Console.WriteLine("{0} was timed out.", line.Text);
+                    //Console.ResetColor();
                     break;
                 default:
                     Console.WriteLine("<-- {0}", line);
@@ -303,8 +309,8 @@ namespace ChatLib.Twitch
             for (int i = 0; i < delegates.Length; i++)
             {
                 TwitchIrcChannel channel = delegates[i].Target as TwitchIrcChannel;
-                if (channel == null ||
-                    line.Parameters.StartsWith("#" + channel.ChannelName) ||
+                if (channel == null || (line.Parameters != null &&
+                    line.Parameters.StartsWith("#" + channel.ChannelName)) ||
                     line.Parameters == "*")
                 {
                     ((LineReceivedEventHandler)delegates[i])(this, line);

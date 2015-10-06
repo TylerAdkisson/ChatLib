@@ -17,6 +17,24 @@ namespace ChatLib.Twitch
         public const string Password = "PASS";
         public const string Nickname = "NICK";
         public const string Mode = "MODE";
+
+        // Numeric
+        public const string Welcome = "001";
+        public const string Yourhost = "002";
+        public const string ServerCreated = "003";
+        public const string ServerInfo = "004";
         public const string NameReply = "353";
+        public const string NameListEnd = "366";
+        public const string MotdStart = "375";
+        public const string MotdBody = "372";
+        public const string MotdEnd = "376";
+
+        // Twitch-specific
+        public const string HostTarget = "HOSTTARGET";
+        public const string ClearChat = "CLEARCHAT";
+        public const string UserState = "USERSTATE";
+        public const string RoomState = "ROOMSTATE";
+        public const string GlobalUserState = "GLOBALUSERSTATE";
+        public const string Reconnect = "RECONNECT";
     }
 }

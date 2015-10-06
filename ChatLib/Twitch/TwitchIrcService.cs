@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -12,12 +13,13 @@ namespace ChatLib.Twitch
     public class TwitchIrcService : IChatService
     {
         private const string ApiAcceptString = "application/vnd.twitchtv.v3+json";
-        public const string EmoteUri = "http://static-cdn.jtvnw.net/emoticons/v1/:emote_id/1.0";
+        internal const string EmoteUri = "http://static-cdn.jtvnw.net/emoticons/v1/:emote_id/1.0";
 
         private string _nickname;
         private string _authToken;
         private List<TwitchIrcChannel> _channels;
-        private Dictionary<EndPoint, ServerConnection> _connectionRegistry;
+        private Dictionary<EndPoint, IrcServerConnection> _connectionRegistry;
+        private List<ChatterStatusGroup> _statusGroups;
 
 
         internal string Nickname { get { return _nickname; } }
@@ -27,7 +29,30 @@ namespace ChatLib.Twitch
         public TwitchIrcService()
         {
             _channels = new List<TwitchIrcChannel>();
-            _connectionRegistry = new Dictionary<EndPoint, ServerConnection>();
+            _connectionRegistry = new Dictionary<EndPoint, IrcServerConnection>();
+
+            _statusGroups = new List<ChatterStatusGroup>();
+
+            // Capabilities group
+            List<ChatterStatusGroupItem> statuses = new List<ChatterStatusGroupItem>();
+            statuses.Add(new ChatterStatusGroupItem("Moderator", "Mod", "Moderates this channel", "#34ae0a"));
+            statuses.Add(new ChatterStatusGroupItem("Global Moderator", "GMod", "Moderates all channels", "#34ae0a"));
+            statuses.Add(new ChatterStatusGroupItem("Administrator", "Admin", "Helps maintain the site", "#ae1010"));
+            statuses.Add(new ChatterStatusGroupItem("Staff", "Staff", "Twitch staff member", "#200f33"));
+
+            _statusGroups.Add(new ChatterStatusGroup(0, statuses));
+
+            // Turbo
+            statuses = new List<ChatterStatusGroupItem>();
+            statuses.Add(new ChatterStatusGroupItem("Twitch Turbo", "Turbo", "Subscribes to Twitch Turbo", "#6441a5"));
+
+            _statusGroups.Add(new ChatterStatusGroup(1, statuses));
+
+            // Subscriber
+            statuses = new List<ChatterStatusGroupItem>();
+            statuses.Add(new ChatterStatusGroupItem("Channel Subscriber", "Sub", "Subscribes to this channel", "#3059BF"));
+
+            _statusGroups.Add(new ChatterStatusGroup(2, statuses));
         }
 
 
@@ -52,7 +77,7 @@ namespace ChatLib.Twitch
         {
             TwitchIrcChannel channelInstance = new TwitchIrcChannel(
                 this,
-                channelName.TrimStart('#'));
+                channelName.ToLower().TrimStart('#'));
             _channels.Add(channelInstance);
 
             return channelInstance;
@@ -61,6 +86,11 @@ namespace ChatLib.Twitch
         public object Upgrade()
         {
             return null;
+        }
+
+        public ReadOnlyCollection<ChatterStatusGroup> GetStatusGroups()
+        {
+            return _statusGroups.AsReadOnly();
         }
 
         public void Dispose()

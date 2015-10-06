@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text;
 
@@ -12,15 +13,36 @@ namespace ChatLib
         {
             Normal,
             Action,
+            Announcement,
         };
 
         private List<TextRun> _runs;
 
 
-        public TextRun Author { get; set; }
+        /// <summary>
+        /// Gets or sets the author of the chat message
+        /// </summary>
+        public ChatterInfo Author { get; set; }
+
+        /// <summary>
+        /// Gets or set the timestamp of the chat message
+        /// </summary>
         public DateTime Timestamp { get; set; }
+
+        /// <summary>
+        /// Gets or sets the kind of message (i.e. normal, action, etc.)
+        /// </summary>
         public Kind MessageKind { get; set; }
-        public IEnumerable<TextRun> TextRuns { get { return _runs; } }
+
+        /// <summary>
+        /// Gets the runs used in the message body
+        /// </summary>
+        public ReadOnlyCollection<TextRun> TextRuns { get { return _runs.AsReadOnly(); } }
+
+        /// <summary>
+        /// Gets or sets the message's identifier
+        /// </summary>
+        public string Id { get; set; }
 
 
         public ChatMessage()
@@ -39,6 +61,10 @@ namespace ChatLib
         }
 
 
+        /// <summary>
+        /// Appends the specified run to the message body
+        /// </summary>
+        /// <param name="run">The run to append</param>
         public void AppendRun(TextRun run)
         {
             if (run == null)
@@ -47,6 +73,10 @@ namespace ChatLib
             _runs.Add(run);
         }
 
+        /// <summary>
+        /// Appends the specified series of runs to the message body
+        /// </summary>
+        /// <param name="runs">The runs to append</param>
         public void AppendRuns(IEnumerable<TextRun> runs)
         {
             if (runs == null)
@@ -56,11 +86,18 @@ namespace ChatLib
         
         }
 
+        /// <summary>
+        /// Removes all runs from the message body
+        /// </summary>
         public void ClearRuns()
         {
             _runs.Clear();
         }
 
+        /// <summary>
+        /// Composes all text content of the body into a string
+        /// </summary>
+        /// <returns>A string containing all text content of the body</returns>
         public override string ToString()
         {
             StringBuilder sb = new StringBuilder();

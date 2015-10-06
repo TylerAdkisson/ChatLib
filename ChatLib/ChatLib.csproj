@@ -35,25 +35,30 @@
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ChatMessage.cs" />
     <Compile Include="ChatServiceFactory.cs" />
+    <Compile Include="ChatterStatusGroup.cs" />
+    <Compile Include="ChatterStatusGroupItem.cs" />
+    <Compile Include="ChatterInfo.cs" />
     <Compile Include="Net40.cs" />
     <Compile Include="EventHandlers.cs" />
+    <Compile Include="Poll.cs" />
+    <Compile Include="PollResults.cs" />
     <Compile Include="Twitch\EventHandlers.cs" />
     <Compile Include="Twitch\IrcCommands.cs" />
     <Compile Include="Twitch\IrcMessage.cs" />
-    <Compile Include="Twitch\ServerConnection.cs" />
+    <Compile Include="Twitch\IrcServerConnection.cs" />
     <Compile Include="TextRun.cs" />
     <Compile Include="Twitch\TwitchIrcChannel.cs" />
     <Compile Include="Twitch\TwitchIrcService.cs" />
     <Compile Include="IChatChannel.cs" />
     <Compile Include="IChatService.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Utilities.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

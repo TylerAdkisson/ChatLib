@@ -15,10 +15,12 @@ namespace ChatLib.Twitch
         private uint Number = 0;
         private TwitchIrcService _service;
         private string _channelName;
-        private ServerConnection _connection;
+        private IrcServerConnection _connection;
 
 
         public string ChannelName { get { return _channelName; } }
+
+        public IChatService ParentService { get { return _service; } }
 
 
         public event EventHandler OnJoin;
@@ -31,6 +33,10 @@ namespace ChatLib.Twitch
 
         public event ChatMessageEventHandler OnChatMessage;
 
+        public event ChatMessageEventHandler OnChannelNotice;
+
+        public event ChatMessagesDeletedEventHandler OnMessagesDeleted;
+
 
         public TwitchIrcChannel(TwitchIrcService service, string channelName)
         {
@@ -41,10 +47,6 @@ namespace ChatLib.Twitch
         }
 
 
-        public IChatService GetParentService()
-        {
-            return _service;
-        }
 
         public void SetAuthentication(string name, string key)
         {
@@ -61,7 +63,7 @@ namespace ChatLib.Twitch
             //   If no other channels are using the connection we were, the service can clean up
             //   the connection.
 
-            ServerConnection connection = _connection;
+            IrcServerConnection connection = _connection;
             if (connection == null)
                 return;
 
@@ -115,7 +117,7 @@ namespace ChatLib.Twitch
                 return;
             }
 
-            ServerConnection connection = ServerConnection.ConnectServer(servers);
+            IrcServerConnection connection = IrcServerConnection.ConnectServer(servers);
             if (connection == null)
             {
                 // Could not connect
@@ -158,22 +160,15 @@ namespace ChatLib.Twitch
             JoinChannel();
         }
 
-        private Dictionary<string, ConsoleColor> _nameColors = new Dictionary<string, ConsoleColor>();
         private void ProcessIrcMessage(object sender, IrcMessage line)
         {
             switch (line.Command)
             {
                 case IrcCommands.PrivateMessage:
-                    //if (!line.Parameters.StartsWith("#" + _channelName))
-                    //    break;
-
-                    //
-                    //
-                    //
-
                     ChatMessage message = new ChatMessage();
                     message.Timestamp = DateTime.Now;
-                    message.Author = line.Source.Remove(line.Source.IndexOf('!'));
+                    message.Author = new ChatterInfo(line.Source.Remove(line.Source.IndexOf('!')));
+                    message.Id = line.Source.Remove(line.Source.IndexOf('!'));
 
                     // Strip CTCP formatting
                     // We only support ACTION for twitch
@@ -189,201 +184,184 @@ namespace ChatLib.Twitch
                     // Unformatted text
                     message.AppendRun(messageText);
 
-                    if (line.Tags != null)
-                    {
-                        string[] tags = line.Tags.Split(';');
+                    ParseTags(line.Tags, message);
 
-                        for (int i = 0; i < tags.Length; i++)
-                        {
-                            int eqIndex = tags[i].IndexOf('=');
-                            string key = tags[i];
-                            string value = "";
+                    RaiseOnChatMessage(message);
 
-                            if (eqIndex > -1)
-                            {
-                                // Some tags have no value
-                                key = tags[i].Remove(eqIndex);
-                                value = tags[i].Substring(eqIndex + 1);
-                            }
-
-                            switch (key)
-                            {
-                                case "color":
-                                    message.Author.Color = value;
-                                    break;
-                                case "display-name":
-                                    if (!string.IsNullOrEmpty(value))
-                                        message.Author.Text = message.Author.Content = value;
-                                    break;
-                                case "emotes":
-                                    if (string.IsNullOrEmpty(value))
-                                        break; // No emotes
-
-                                    string[] emotes = value.Split('/');
-
-                                    LinkedList<TextRun> runs = new LinkedList<TextRun>();
-                                    runs.AddFirst(messageText);
-
-                                    for (int p = 0; p < emotes.Length; p++)
-                                    {
-                                        int colonIndex = emotes[p].IndexOf(':');
-                                        int emoteId = int.Parse(emotes[p].Remove(colonIndex));
-                                        string[] extents = emotes[p].Substring(colonIndex + 1).Split(',');
-
-                                        for (int k = 0; k < extents.Length; k++)
-                                        {
-                                            int dashIndex = extents[k].IndexOf('-');
-
-                                            int emoteStart = int.Parse(extents[k].Remove(dashIndex));
-                                            int emoteEnd = int.Parse(extents[k].Substring(dashIndex + 1));
-
-                                            LinkedListNode<TextRun> theRun = null;
-                                            int position = 0;
-
-                                            // Find run that contains the emote
-                                            LinkedListNode<TextRun> node = runs.First;
-                                            while (node != null)
-                                            {
-                                                if (position <= emoteStart &&
-                                                    (position + node.Value.Text.Length) >= emoteEnd)
-                                                {
-                                                    theRun = node;
-                                                    break;
-                                                }
-                                                position += node.Value.Text.Length;
-
-                                                // Move to next item
-                                                node = node.Next;
-                                            }
-
-                                            System.Diagnostics.Debug.Assert(theRun != null, "theRun is null?!");
-
-                                            // Split run
-                                            TextRun leftRun = new TextRun(theRun.Value.Text.Remove(emoteStart - position));
-                                            TextRun rightRun = new TextRun(theRun.Value.Text.Substring(emoteEnd + 1 - position));
-                                            TextRun emoteRun = new TextRun(theRun.Value.Text.Substring(emoteStart - position, emoteEnd - emoteStart + 1));
-
-                                            emoteRun.Kind = TextRun.RunKind.Image;
-                                            emoteRun.Content = TwitchIrcService.EmoteUri.Replace(":emote_id", emoteId.ToString());
-
-                                            if (leftRun.Text.Length > 0)
-                                                runs.AddBefore(theRun, leftRun);
-                                            runs.AddBefore(theRun, emoteRun);
-                                            if (rightRun.Text.Length > 0)
-                                                runs.AddBefore(theRun, rightRun);
-                                            runs.Remove(theRun);
-                                        }
-                                    }
-
-                                    message.ClearRuns();
-                                    message.AppendRuns(runs);
-
-                                    break;
-                                default:
-                                    break;
-                            }
-                        }
-                    }
-
-                    //
-                    //
-                    //
-
-                    lock (Console.OutputEncoding)
-                    {
-                        ConsoleColor nameColor = ConsoleColor.DarkGreen;
-
-                        //if (!string.IsNullOrEmpty(message.Author.Color))
-                        //{
-                        //    nameColor = ConsoleColorConverter.HexToColor(message.Author.Color.TrimStart('#'));
-                        //}
-
-                        //if (nameColor == ConsoleColor.Gray)
-                        //{
-                        //    if (!_nameColors.TryGetValue(line.Source, out nameColor))
-                        //        nameColor = _nameColors[line.Source] = ConsoleColorConverter.GetColor();
-                        //}
-
-                        if (true)
-                        {
-
-                            Console.Write("[{0}] #{1} ",
-                                message.Timestamp.ToLongTimeString(),
-                                _channelName);
-
-                            Console.ForegroundColor = nameColor;
-                            Console.Write("{0}", message.Author.Text);
-
-                            //Console.Write("[{0,20}] ", _channelName);
-                            //Console.ForegroundColor = nameColor;
-                            //Console.Write("{0,20}", message.Author.Text);
-                            //Console.ResetColor();
-
-                            if (message.MessageKind == ChatMessage.Kind.Action)
-                            {
-                                Console.ForegroundColor = nameColor;
-                                Console.Write(" ");
-                            }
-                            else
-                            {
-                                Console.ResetColor();
-                                Console.Write(": ");
-                            }
-
-                            foreach (var segment in message.TextRuns)
-                            {
-                                if (segment.Kind == TextRun.RunKind.Image)
-                                    Console.ForegroundColor = ConsoleColor.Yellow;
-
-                                Console.Write(segment.Text);
-                                if (message.MessageKind == ChatMessage.Kind.Action)
-                                    Console.ForegroundColor = nameColor;
-                                else
-                                    Console.ResetColor();
-                            }
-                            //if (message.MessageKind == ChatMessage.Kind.Action)
-                            //    Console.Write("*");
-
-                            Console.ResetColor();
-                            Console.WriteLine();
-                        }
-
-                        //Console.WriteLine("]: {0}", message.ToString());
-
-                        RaiseOnChatMessage(message);
-                    }
                     break;
                 case IrcCommands.Join:
-                    //if (!line.Parameters.StartsWith("#" + _channelName))
-                    //    break;
-
                     if (line.Source.StartsWith(_service.Nickname))
                         RaiseOnJoin();
-                    //else
-                    //{
-                    //    Console.WriteLine("[{0}] #{1} {2} has joined.",
-                    //        DateTime.Now.ToLongTimeString(),
-                    //        _channelName, line.Source.Remove(line.Source.IndexOf('!')));
-                    //}
+
+                    RaiseOnChatterJoin(line.Source.Remove(line.Source.IndexOf('!')));
 
                     break;
                 case IrcCommands.Part:
-                    //if (!line.Parameters.StartsWith("#" + _channelName))
-                    //    break;
-
                     if (line.Source.StartsWith(_service.Nickname))
                         RaiseOnLeave(LeaveReason.ChannelLeave);
-                    //else
-                    //{
-                    //    Console.WriteLine("[{0}] #{1} {2} has left.",
-                    //        DateTime.Now.ToLongTimeString(),
-                    //        _channelName, line.Source.Remove(line.Source.IndexOf('!')));
-                    //}
+
+                    RaiseOnChatterLeave(line.Source.Remove(line.Source.IndexOf('!')));
+
+                    break;
+                case IrcCommands.Notice:
+
+                    ChatMessage notice = new ChatMessage();
+                    notice.Timestamp = DateTime.Now;
+                    notice.Author = new ChatterInfo("#" + _channelName);
+
+                    notice.AppendRun(line.Text);
+
+                    RaiseOnChannelNotice(notice);
+
+                    break;
+                case IrcCommands.ClearChat:
+
+                    RaiseOnMessagesDeleted(line.Text);
 
                     break;
                 default:
                     break;
             }
+        }
+
+        private void ParseTags(string messageTags, ChatMessage message)
+        {
+            if (Net40.StringIsNullOrWhiteSpace(messageTags))
+                return;
+
+            string[] tags = messageTags.Split(';');
+            List<ChatterStatusGroupItem> groups = new List<ChatterStatusGroupItem>(new ChatterStatusGroupItem[3]);
+
+            for (int i = 0; i < tags.Length; i++)
+            {
+                int eqIndex = tags[i].IndexOf('=');
+                string key = tags[i];
+                string value = "";
+
+                if (eqIndex > -1)
+                {
+                    // Some tags have no value
+                    key = tags[i].Remove(eqIndex);
+                    value = tags[i].Substring(eqIndex + 1);
+                }
+
+                switch (key)
+                {
+                    case "color":
+                        message.Author.Name.Color = value;
+                        break;
+                    case "display-name":
+                        if (!string.IsNullOrEmpty(value))
+                            message.Author.Name.Text = message.Author.Name.Content = value;
+                        break;
+                    case "emotes":
+                        if (string.IsNullOrEmpty(value))
+                            break; // No emotes
+
+                        string[] emotes = value.Split('/');
+
+                        // First run is the full message text
+                        LinkedList<TextRun> runs = new LinkedList<TextRun>();
+                        runs.AddFirst(message.TextRuns[0]);
+
+                        for (int p = 0; p < emotes.Length; p++)
+                        {
+                            int colonIndex = emotes[p].IndexOf(':');
+                            int emoteId = int.Parse(emotes[p].Remove(colonIndex));
+                            string[] extents = emotes[p].Substring(colonIndex + 1).Split(',');
+
+                            for (int k = 0; k < extents.Length; k++)
+                            {
+                                int dashIndex = extents[k].IndexOf('-');
+
+                                int emoteStart = int.Parse(extents[k].Remove(dashIndex));
+                                int emoteEnd = int.Parse(extents[k].Substring(dashIndex + 1));
+
+                                // Adjust emote start/end for UTF-16 sillyness
+                                int emoteStartAdj = Utilities.AdjustCharIndex(message.TextRuns[0].Text, 0, emoteStart);
+                                emoteEnd = Utilities.AdjustCharIndex(message.TextRuns[0].Text, emoteStartAdj, emoteEnd);
+
+                                emoteEnd += (emoteStartAdj - emoteStart);
+                                emoteStart = emoteStartAdj;
+
+                                LinkedListNode<TextRun> theRun = null;
+                                int position = 0;
+
+                                // Find run that contains the emote
+                                LinkedListNode<TextRun> node = runs.First;
+                                while (node != null)
+                                {
+                                    if (position <= emoteStart &&
+                                        (position + node.Value.Text.Length) >= emoteEnd)
+                                    {
+                                        theRun = node;
+                                        break;
+                                    }
+                                    position += node.Value.Text.Length;
+
+                                    // Move to next item
+                                    node = node.Next;
+                                }
+
+                                System.Diagnostics.Debug.Assert(theRun != null, "theRun is null?!");
+
+                                // Split run
+                                string subStr = theRun.Value.Text.Substring(emoteStart - position, emoteEnd - emoteStart + 1);
+                                TextRun emoteRun = new TextRun(subStr);
+
+                                emoteRun.Kind = TextRun.RunKind.Image;
+                                emoteRun.Content = TwitchIrcService.EmoteUri.Replace(":emote_id", emoteId.ToString());
+
+                                if (emoteStart - position > 0)
+                                    runs.AddBefore(theRun, new TextRun(theRun.Value.Text.Remove(emoteStart - position)));
+
+                                runs.AddBefore(theRun, emoteRun);
+
+                                if ((position + theRun.Value.Text.Length) - (emoteEnd + 1) > 0)
+                                    runs.AddBefore(theRun, new TextRun(theRun.Value.Text.Substring(emoteEnd + 1 - position)));
+
+                                runs.Remove(theRun);
+                            }
+                        }
+
+                        message.ClearRuns();
+                        message.AppendRuns(runs);
+
+                        break;
+                    case "user-type":
+                        switch (value)
+                        {
+                            case "mod":
+                                groups[0] = _service.GetStatusGroups()[0].GroupItems[0];
+                                break;
+                            case "global_mod":
+                                groups[0] = _service.GetStatusGroups()[0].GroupItems[1];
+                                break;
+                            case "admin":
+                                groups[0] = _service.GetStatusGroups()[0].GroupItems[2];
+                                break;
+                            case "staff":
+                                groups[0] = _service.GetStatusGroups()[0].GroupItems[3];
+                                break;
+                            default:
+                                break;
+                        }
+
+                        break;
+                    case "turbo":
+                        if (value == "1")
+                            groups[1] = _service.GetStatusGroups()[1].GroupItems[0];
+                        break;
+                    case "subscriber":
+                        if(value == "1")
+                            groups[2] = _service.GetStatusGroups()[2].GroupItems[0];
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            message.Author.StatusGroupMembership = groups.AsReadOnly();
         }
 
 
@@ -412,6 +390,42 @@ namespace ChatLib.Twitch
                 return;
 
             handler(this, message);
+        }
+
+        private void RaiseOnChatterJoin(string chatter)
+        {
+            ChatterJoinLeaveEventHandler handler = OnChatterJoin;
+            if (handler == null)
+                return;
+
+            handler(this, chatter);
+        }
+
+        private void RaiseOnChatterLeave(string chatter)
+        {
+            ChatterJoinLeaveEventHandler handler = OnChatterLeave;
+            if (handler == null)
+                return;
+
+            handler(this, chatter);
+        }
+
+        private void RaiseOnChannelNotice(ChatMessage message)
+        {
+            ChatMessageEventHandler handler = OnChannelNotice;
+            if (handler == null)
+                return;
+
+            handler(this, message);
+        }
+
+        private void RaiseOnMessagesDeleted(params string[] messageIds)
+        {
+            ChatMessagesDeletedEventHandler handler = OnMessagesDeleted;
+            if (handler == null)
+                return;
+
+            handler(this, messageIds);
         }
     }
 }
