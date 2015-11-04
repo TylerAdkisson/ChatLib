@@ -37,18 +37,19 @@ namespace ChatLib.Twitch
             List<ChatterStatusGroupItem> statuses = new List<ChatterStatusGroupItem>();
             statuses.Add(new ChatterStatusGroupItem("Moderator", "Mod", "Moderates this channel", "#34ae0a"));
             statuses.Add(new ChatterStatusGroupItem("Global Moderator", "GMod", "Moderates all channels", "#34ae0a"));
-            statuses.Add(new ChatterStatusGroupItem("Administrator", "Admin", "Helps maintain the site", "#ae1010"));
+            statuses.Add(new ChatterStatusGroupItem("Administrator", "Admin", "Helps maintain the site", "#faaf19"));
             statuses.Add(new ChatterStatusGroupItem("Staff", "Staff", "Twitch staff member", "#200f33"));
+            //#ae1010
 
             _statusGroups.Add(new ChatterStatusGroup(0, statuses));
 
-            // Turbo
+            // Turbo group
             statuses = new List<ChatterStatusGroupItem>();
             statuses.Add(new ChatterStatusGroupItem("Twitch Turbo", "Turbo", "Subscribes to Twitch Turbo", "#6441a5"));
 
             _statusGroups.Add(new ChatterStatusGroup(1, statuses));
 
-            // Subscriber
+            // Subscriber group
             statuses = new List<ChatterStatusGroupItem>();
             statuses.Add(new ChatterStatusGroupItem("Channel Subscriber", "Sub", "Subscribes to this channel", "#3059BF"));
 

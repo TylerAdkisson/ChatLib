@@ -44,6 +44,7 @@
     <Compile Include="ChatterStatusGroup.cs" />
     <Compile Include="ChatterStatusGroupItem.cs" />
     <Compile Include="ChatterInfo.cs" />
+    <Compile Include="Log.cs" />
     <Compile Include="Net40.cs" />
     <Compile Include="EventHandlers.cs" />
     <Compile Include="Poll.cs" />

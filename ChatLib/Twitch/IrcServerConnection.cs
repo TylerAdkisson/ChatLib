@@ -13,6 +13,7 @@ namespace ChatLib.Twitch
     class IrcServerConnection
     {
         private static Dictionary<EndPoint, IrcServerConnection> _connectionRegistry;
+        private string LogSrc = "IrcServerConnection";
 
         private Socket _socket;
         private Thread _workerThread;
@@ -173,7 +174,7 @@ namespace ChatLib.Twitch
 
         private void WriteLine(string text)
         {
-            Console.WriteLine("--> {0}", text);
+            Log.Debug(LogSrc, "--> {0}", text);
             byte[] data = Encoding.UTF8.GetBytes(text + "\r\n");
 
             try
@@ -254,7 +255,7 @@ namespace ChatLib.Twitch
                 _runThread = false;
             }
 
-            Console.WriteLine("Socket disconnected");
+            Log.Debug(LogSrc, "Socket disconnected");
 
             if (AutomaticReconnect && _runThread)
             {
@@ -284,14 +285,10 @@ namespace ChatLib.Twitch
                 case IrcCommands.Mode:
                 case IrcCommands.Notice:
                 case IrcCommands.NameReply:
-                    break;
-                //case IrcCommands.ClearChat:
-                    //Console.ForegroundColor = ConsoleColor.DarkCyan;
-                    //Console.WriteLine("{0} was timed out.", line.Text);
-                    //Console.ResetColor();
+                case IrcCommands.ClearChat:
                     break;
                 default:
-                    Console.WriteLine("<-- {0}", line);
+                    Log.Debug(LogSrc, "<-- {0}", line);
                     break;
             }
 

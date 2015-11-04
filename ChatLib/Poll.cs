@@ -185,7 +185,7 @@ namespace ChatLib
         private void channel_OnChatMessage(object sender, ChatMessage message)
         {
             string chatterName = message.Author.Name.Text.ToLowerInvariant();
-            if (false)
+            if (true)
             {
                 if (_votedUsers.Contains(chatterName))
                     return; // Already voted
