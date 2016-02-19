@@ -37,6 +37,12 @@ namespace ChatLib
         IChatChannel ConnectChannel(string channelName);
 
         /// <summary>
+        /// Creates a new private message instance
+        /// </summary>
+        /// <returns>A new <see cref="IChatChannel"/> instance</returns>
+        IPrivateMessageChannel ConnectPrivateMessage();
+
+        /// <summary>
         /// Reserved for future use
         /// </summary>
         /// <returns>To be determined</returns>

@@ -13,7 +13,7 @@ namespace ChatLib.Twitch
     class IrcServerConnection
     {
         private static Dictionary<EndPoint, IrcServerConnection> _connectionRegistry;
-        private string LogSrc = "IrcServerConnection";
+        private static string LogSrc = "IrcServerConnection";
 
         private Socket _socket;
         private Thread _workerThread;
@@ -35,6 +35,7 @@ namespace ChatLib.Twitch
 
         public event LineReceivedEventHandler OnLineReceived;
         public event EventHandler OnConnected;
+        public event EventHandler OnDisconnected;
 
 
         static IrcServerConnection()
@@ -98,6 +99,7 @@ namespace ChatLib.Twitch
                     if (connection.Connect())
                     {
                         // Connection successful, return connection
+                        Log.Debug(LogSrc, "Connected to {0}", connection.Destination);
                         _connectionRegistry[servers[i]] = connection;
 
                         break;
@@ -243,7 +245,7 @@ namespace ChatLib.Twitch
             {
                 // Network error
             }
-                // TODO: We may be able to remote this catch. Determine of streamreader can throw
+                // TODO: We may be able to remove this catch. Determine of streamreader can throw
                 //   SocketExceptions
             catch (SocketException ex)
             {
@@ -260,6 +262,7 @@ namespace ChatLib.Twitch
             if (AutomaticReconnect && _runThread)
             {
                 // Begin reconnecting
+                RaiseOnDisconnected();
                 ThreadPool.QueueUserWorkItem(obj => _reconnectTimer.Change(_minReconnectInterval, -1));
             }
         }
@@ -277,9 +280,6 @@ namespace ChatLib.Twitch
                     SendIrcCommand(new IrcMessage(IrcCommands.Pong, "", line.Text));
                     return;
                 case IrcCommands.PrivateMessage:
-                    if (line.Text == "!disconnect")
-                        _socket.Close();
-                    break;
                 case IrcCommands.Part:
                 case IrcCommands.Join:
                 case IrcCommands.Mode:
@@ -305,11 +305,20 @@ namespace ChatLib.Twitch
             Delegate[] delegates = handler.GetInvocationList();
             for (int i = 0; i < delegates.Length; i++)
             {
-                TwitchIrcChannel channel = delegates[i].Target as TwitchIrcChannel;
-                if (channel == null || (line.Parameters != null &&
-                    line.Parameters.StartsWith("#" + channel.ChannelName)) ||
-                    line.Parameters == "*")
+                if (delegates[i].Target.GetType() == typeof(TwitchIrcChannel))
                 {
+                    // Chat channel messages
+                    TwitchIrcChannel channel = delegates[i].Target as TwitchIrcChannel;
+                    if (channel == null ||
+                        (line.Parameters != null && line.Parameters.StartsWith("#" + channel.ChannelName)) ||
+                        line.Parameters == "*")
+                    {
+                        ((LineReceivedEventHandler)delegates[i])(this, line);
+                    }
+                }
+                else
+                {
+                    // Private messages
                     ((LineReceivedEventHandler)delegates[i])(this, line);
                 }
             }
@@ -318,6 +327,15 @@ namespace ChatLib.Twitch
         private void RaiseOnConnected()
         {
             EventHandler handler = OnConnected;
+            if (handler == null)
+                return;
+
+            handler(this, EventArgs.Empty);
+        }
+
+        private void RaiseOnDisconnected()
+        {
+            EventHandler handler = OnDisconnected;
             if (handler == null)
                 return;
 

@@ -1,63 +1,34 @@
-﻿using Newtonsoft.Json;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net;
-using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 
-
 namespace ChatLib.Twitch
 {
-    public class TwitchIrcChannel : IChatChannel
+    class TwitchWhisperChannel : IPrivateMessageChannel
     {
-        const string Src = "TwitchIrcChannel";
-
-        private static uint Counter = 0;
-        private uint Number = 0;
+        private static string Src = "TwitchWhisperChannel";
         private TwitchIrcService _service;
-        private string _channelName;
         private IrcServerConnection _connection;
 
 
-        public string ChannelName { get { return _channelName; } }
-
         public IChatService ParentService { get { return _service; } }
-
 
 
         public event EventHandler OnJoin;
 
         public event ChannelLeaveEventHandler OnLeave;
 
-        public event ChatterJoinLeaveEventHandler OnChatterJoin;
-
-        public event ChatterJoinLeaveEventHandler OnChatterLeave;
-
-        public event ChatMessageEventHandler OnChatMessage;
-
-        public event ChatMessageEventHandler OnChannelNotice;
-
-        public event ChatMessagesDeletedEventHandler OnMessagesDeleted;
-
-        public event ChatViewerListEventHandler OnViewerListCompleted;
+        public event ChatMessageEventHandler OnMessage;
 
 
-        public TwitchIrcChannel(TwitchIrcService service, string channelName)
+        public TwitchWhisperChannel(TwitchIrcService parent)
         {
-            _service = service;
-            _channelName = channelName;
-
-            Number = Counter++;
+            _service = parent;
         }
 
-
-
-        public void SetAuthentication(string name, string key)
-        {
-        }
 
         public void Join()
         {
@@ -70,8 +41,6 @@ namespace ChatLib.Twitch
             if (connection == null)
                 return;
 
-            connection.SendIrcCommand(new IrcMessage(IrcCommands.Part, "#" + _channelName));
-
             connection.OnLineReceived -= ProcessIrcMessage;
             connection.OnConnected -= ServerConnected;
 
@@ -81,49 +50,22 @@ namespace ChatLib.Twitch
             RaiseOnLeave(LeaveReason.ChannelLeave);
         }
 
-        public void SendMessage(string message)
+        public void SendMessage(string username, string message)
         {
             IrcMessage msg = new IrcMessage(
                 IrcCommands.PrivateMessage,
-                "#" + _channelName,
-                message);
+                "#jtv",
+                string.Concat("/w ", username, " ", message));
 
             _connection.SendIrcCommand(msg);
-        }
-
-        public void SendMessage(IEnumerable<TextRun> formattedMessage)
-        {
-            // IRC doesn't support formatted messages, just send text
-            StringBuilder sb = new StringBuilder();
-            foreach (var run in formattedMessage)
-            {
-                sb.Append(run.Text);
-            }
-
-            IrcMessage msg = new IrcMessage(
-                IrcCommands.PrivateMessage,
-                "#" + _channelName,
-                sb.ToString());
-
-            _connection.SendIrcCommand(msg);
-        }
-
-        public void GetViewerList()
-        {
-            WebRequest request = WebRequest.Create(TwitchIrcService.ViewerListUri.Replace(":channel", _channelName));
-            request.ContentType = "application/json";
-            request.Timeout = 5000;
-
-            // Initiate the request
-            request.BeginGetResponse(ViewerListCallback, request);
         }
 
 
         private void JoinWorkerThread(object state)
         {
             // Lookup which servers to connect to for this channel
-            IPEndPoint[] servers = _service.GetChatServers(_channelName, false);
-            if(servers == null)
+            IPEndPoint[] servers = _service.GetChatServers(string.Empty, true);
+            if (servers == null)
             {
                 // Could not connect
                 RaiseOnLeave(LeaveReason.Error);
@@ -145,6 +87,7 @@ namespace ChatLib.Twitch
 
             // Hook up handler here so we don't call JoinChannel() twice
             connection.OnConnected += ServerConnected;
+            connection.OnDisconnected += ServerDisconnected;
         }
 
         private void JoinChannel()
@@ -158,16 +101,7 @@ namespace ChatLib.Twitch
                 }
             }
 
-            // Auth channel
-            // We don't auth to channels for twitch
-
-            // Join channel
-            // NOTE: We do not need to join a channel to participate in whispers, but we join anyway
-            //   so we get the join message for things that expect it
-            _connection.SendIrcCommand(new IrcMessage(IrcCommands.Join, "#" + _channelName));
-
-            // TODO: Wait and call OnJoin after receiving the join message?
-            //RaiseOnJoin();
+            RaiseOnJoin();
         }
 
         private void ServerConnected(object sender, EventArgs e)
@@ -175,11 +109,16 @@ namespace ChatLib.Twitch
             JoinChannel();
         }
 
+        private void ServerDisconnected(object sender, EventArgs e)
+        {
+            RaiseOnLeave(LeaveReason.Error);
+        }
+
         private void ProcessIrcMessage(object sender, IrcMessage line)
         {
             switch (line.Command)
             {
-                case IrcCommands.PrivateMessage:
+                case IrcCommands.Whisper:
                     ChatMessage message = new ChatMessage();
                     message.Timestamp = DateTime.Now;
                     message.Author = new ChatterInfo(line.Source.Remove(line.Source.IndexOf('!')));
@@ -201,37 +140,7 @@ namespace ChatLib.Twitch
 
                     ParseTags(line.Tags, message);
 
-                    RaiseOnChatMessage(message);
-
-                    break;
-                case IrcCommands.Join:
-                    if (line.Source.StartsWith(_service.Nickname))
-                        RaiseOnJoin();
-
-                    RaiseOnChatterJoin(line.Source.Remove(line.Source.IndexOf('!')));
-
-                    break;
-                case IrcCommands.Part:
-                    if (line.Source.StartsWith(_service.Nickname))
-                        RaiseOnLeave(LeaveReason.ChannelLeave);
-
-                    RaiseOnChatterLeave(line.Source.Remove(line.Source.IndexOf('!')));
-
-                    break;
-                case IrcCommands.Notice:
-
-                    ChatMessage notice = new ChatMessage();
-                    notice.Timestamp = DateTime.Now;
-                    notice.Author = new ChatterInfo("#" + _channelName);
-
-                    notice.AppendRun(line.Text);
-
-                    RaiseOnChannelNotice(notice);
-
-                    break;
-                case IrcCommands.ClearChat:
-
-                    RaiseOnMessagesDeleted(line.Text);
+                    RaiseOnMessage(message);
 
                     break;
                 default:
@@ -368,7 +277,7 @@ namespace ChatLib.Twitch
                             groups[1] = _service.GetStatusGroups()[1].GroupItems[0];
                         break;
                     case "subscriber":
-                        if(value == "1")
+                        if (value == "1")
                             groups[2] = _service.GetStatusGroups()[2].GroupItems[0];
                         break;
                     default:
@@ -377,36 +286,6 @@ namespace ChatLib.Twitch
             }
 
             message.Author.StatusGroupMembership = groups.AsReadOnly();
-        }
-
-        private void ViewerListCallback(IAsyncResult ar)
-        {
-            WebRequest request = (WebRequest)ar.AsyncState;
-            try
-            {
-                WebResponse response = request.EndGetResponse(ar);
-                TwitchViewerList viewerList;
-                using (Stream str = response.GetResponseStream())
-                {
-                    using (StreamReader sr = new StreamReader(str))
-                    {
-                        JsonReader reader = new JsonTextReader(sr);
-                        JsonSerializer serial = JsonSerializer.Create();
-                        viewerList = serial.Deserialize<TwitchViewerList>(reader);
-                    }
-                }
-
-                response.Close();
-
-                RaiseOnViewerListCompleted(true, viewerList);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(Src, "Failed to get viewer list: {0}", ex.Message);
-
-                // Something went wrong
-                RaiseOnViewerListCompleted(false, null);
-            }
         }
 
 
@@ -428,58 +307,13 @@ namespace ChatLib.Twitch
             handler(this, reason);
         }
 
-        private void RaiseOnChatMessage(ChatMessage message)
+        private void RaiseOnMessage(ChatMessage message)
         {
-            ChatMessageEventHandler handler = OnChatMessage;
+            ChatMessageEventHandler handler = OnMessage;
             if (handler == null)
                 return;
 
             handler(this, message);
-        }
-
-        private void RaiseOnChatterJoin(string chatter)
-        {
-            ChatterJoinLeaveEventHandler handler = OnChatterJoin;
-            if (handler == null)
-                return;
-
-            handler(this, chatter);
-        }
-
-        private void RaiseOnChatterLeave(string chatter)
-        {
-            ChatterJoinLeaveEventHandler handler = OnChatterLeave;
-            if (handler == null)
-                return;
-
-            handler(this, chatter);
-        }
-
-        private void RaiseOnChannelNotice(ChatMessage message)
-        {
-            ChatMessageEventHandler handler = OnChannelNotice;
-            if (handler == null)
-                return;
-
-            handler(this, message);
-        }
-
-        private void RaiseOnMessagesDeleted(params string[] messageIds)
-        {
-            ChatMessagesDeletedEventHandler handler = OnMessagesDeleted;
-            if (handler == null)
-                return;
-
-            handler(this, messageIds);
-        }
-
-        private void RaiseOnViewerListCompleted(bool success, IViewerList viewerList)
-        {
-            ChatViewerListEventHandler handler = OnViewerListCompleted;
-            if (handler == null)
-                return;
-
-            handler(this, success, viewerList);
         }
     }
 }

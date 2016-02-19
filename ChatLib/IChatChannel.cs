@@ -56,6 +56,11 @@ namespace ChatLib
         /// </summary>
         event ChatMessagesDeletedEventHandler OnMessagesDeleted;
 
+        /// <summary>
+        /// Raised when a pending request for the viewer list has completed or failed
+        /// </summary>
+        event ChatViewerListEventHandler OnViewerListCompleted;
+
 
         /// <summary>
         /// Sets the channel-level authentication for this channel instance
@@ -92,5 +97,10 @@ namespace ChatLib
         /// </summary>
         /// <param name="formattedMessage">The text runs that the message is composed of</param>
         void SendMessage(IEnumerable<TextRun> formattedMessage);
+
+        /// <summary>
+        /// Requests the list of chatters for the channel
+        /// </summary>
+        void GetViewerList();
     }
 }

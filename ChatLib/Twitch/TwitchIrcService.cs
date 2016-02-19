@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -14,10 +15,12 @@ namespace ChatLib.Twitch
     {
         private const string ApiAcceptString = "application/vnd.twitchtv.v3+json";
         internal const string EmoteUri = "http://static-cdn.jtvnw.net/emoticons/v1/:emote_id/1.0";
+        internal const string ViewerListUri = "http://tmi.twitch.tv/group/user/:channel/chatters";
 
         private string _nickname;
         private string _authToken;
         private List<TwitchIrcChannel> _channels;
+        private List<TwitchWhisperChannel> _whispers;
         private Dictionary<EndPoint, IrcServerConnection> _connectionRegistry;
         private List<ChatterStatusGroup> _statusGroups;
 
@@ -29,6 +32,7 @@ namespace ChatLib.Twitch
         public TwitchIrcService()
         {
             _channels = new List<TwitchIrcChannel>();
+            _whispers = new List<TwitchWhisperChannel>();
             _connectionRegistry = new Dictionary<EndPoint, IrcServerConnection>();
 
             _statusGroups = new List<ChatterStatusGroup>();
@@ -84,6 +88,14 @@ namespace ChatLib.Twitch
             return channelInstance;
         }
 
+        public IPrivateMessageChannel ConnectPrivateMessage()
+        {
+            TwitchWhisperChannel whisperInstance = new TwitchWhisperChannel(this);
+            _whispers.Add(whisperInstance);
+
+            return whisperInstance;
+        }
+
         public object Upgrade()
         {
             return null;
@@ -96,24 +108,39 @@ namespace ChatLib.Twitch
 
         public void Dispose()
         {
-            // TODO: Cleanup all socket connections
+            // Cleanup all socket connections
             for (int i = 0; i < _channels.Count; i++)
             {
                 _channels[i].Leave();
             }
             _channels.Clear();
+
+            for (int i = 0; i < _whispers.Count; i++)
+            {
+                _whispers[i].Leave();
+            }
+            _whispers.Clear();
         }
 
 
-        internal IPEndPoint[] GetChatServers(string channelName)
+        public IPEndPoint[] GetChatServers(string channelName, bool isGroup)
         {
-            if (Net40.StringIsNullOrWhiteSpace(channelName))
+            if (!isGroup && Net40.StringIsNullOrWhiteSpace(channelName))
                 throw new ArgumentNullException("channelName");
 
-            string chatPropertyUri = string.Concat(
-                "http://api.twitch.tv/api/channels/",
-                channelName,
-                "/chat_properties");
+            string chatPropertyUri = "";
+
+            if (isGroup)
+            {
+                chatPropertyUri = "http://tmi.twitch.tv/servers?cluster=group";
+            }
+            else
+            {
+                chatPropertyUri = string.Concat(
+                     "http://api.twitch.tv/api/channels/",
+                     channelName,
+                     "/chat_properties");
+            }
             HttpWebRequest req = (HttpWebRequest)HttpWebRequest.Create(chatPropertyUri);
             req.Accept = ApiAcceptString;
 
@@ -138,48 +165,35 @@ namespace ChatLib.Twitch
             // Reader owns base stream and will dispose it for us
             using (StreamReader reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
             {
-                string responseText = reader.ReadToEnd();
+                JsonReader jsonReader = new JsonTextReader(reader);
 
-                // NOTE: We're doing the parsing manually, as I don't want to add an entire JSON
-                //   library just to parse this response.
+                JsonSerializer serial = JsonSerializer.Create();
+                ServerList list = serial.Deserialize<ServerList>(jsonReader);
+                IList<string> serverList = isGroup ? list.Servers : list.ChatServers;
 
-                int index = responseText.IndexOf("\"chat_servers\":");
-                if (index < 0)
-                    return null;
-
-                // Find array begin char
-                index = responseText.IndexOf('[', index);
-                if (index < 0)
-                    return null;
-
-                // Find array end char
-                int endIndex = responseText.IndexOf(']', index);
-                if (endIndex < 0)
-                    return null;
-
-                string[] serverList = responseText.Substring(index + 1, (endIndex - index) - 1).Split(',');
-
-                results = new IPEndPoint[serverList.Length];
-                for (int i = 0; i < serverList.Length; i++)
+                results = new IPEndPoint[serverList.Count];
+                for (int i = 0; i < serverList.Count; i++)
                 {
                     int portIndex = serverList[i].LastIndexOf(':');
 
-                    string hostname = serverList[i].Remove(portIndex).TrimStart('"');
-                    string portString = serverList[i].Substring(portIndex + 1).TrimEnd('"');
+                    string hostname = serverList[i].Remove(portIndex);
+                    string portString = serverList[i].Substring(portIndex + 1);
 
                     IPAddress hostAddress;
                     int hostPort;
 
                     if (!IPAddress.TryParse(hostname, out hostAddress) ||
-                        !int.TryParse(portString, out hostPort))
+                        !int.TryParse(portString, out hostPort) ||
+                        hostPort < 1 || hostPort > 65535)
                         continue;
 
                     results[i] = new IPEndPoint(hostAddress, hostPort);
                 }
             }
 
+            response.Close();
+
             return results;
         }
-
     }
 }

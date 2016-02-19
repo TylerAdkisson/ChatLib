@@ -36,5 +36,6 @@ namespace ChatLib.Twitch
         public const string RoomState = "ROOMSTATE";
         public const string GlobalUserState = "GLOBALUSERSTATE";
         public const string Reconnect = "RECONNECT";
+        public const string Whisper = "WHISPER";
     }
 }

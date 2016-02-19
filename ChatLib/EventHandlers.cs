@@ -46,4 +46,12 @@ namespace ChatLib
     /// <param name="sender">The object that raised the event</param>
     /// <param name="results">The results of the poll</param>
     public delegate void PollResultsEventHandler(object sender, PollResults results);
+
+    /// <summary>
+    /// Represents the method that will handle the result of viewer list requests
+    /// </summary>
+    /// <param name="sender">The object that raised the event</param>
+    /// <param name="successResult">True if the request succeeded, otherwise false</param>
+    /// <param name="viewerList">An instance of _TYPE_NAME_HERE_, holding the names of all users in chat</param>
+    public delegate void ChatViewerListEventHandler(object sender, bool successResult, IViewerList viewerList);
 }
