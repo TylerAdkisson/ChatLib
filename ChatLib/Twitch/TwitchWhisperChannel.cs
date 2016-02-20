@@ -43,6 +43,7 @@ namespace ChatLib.Twitch
 
             connection.OnLineReceived -= ProcessIrcMessage;
             connection.OnConnected -= ServerConnected;
+            connection.OnDisconnected -= ServerDisconnected;
 
             connection.Release();
             _connection = null;
@@ -65,7 +66,7 @@ namespace ChatLib.Twitch
         {
             // Lookup which servers to connect to for this channel
             IPEndPoint[] servers = _service.GetChatServers(string.Empty, true);
-            if (servers == null)
+            if (servers == null || servers.Length == 0)
             {
                 // Could not connect
                 RaiseOnLeave(LeaveReason.Error);

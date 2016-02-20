@@ -13,6 +13,7 @@ namespace ChatLib.Twitch
 {
     public class TwitchIrcService : IChatService
     {
+        private const string Src = "TwitchIrcService";
         private const string ApiAcceptString = "application/vnd.twitchtv.v3+json";
         internal const string EmoteUri = "http://static-cdn.jtvnw.net/emoticons/v1/:emote_id/1.0";
         internal const string ViewerListUri = "http://tmi.twitch.tv/group/user/:channel/chatters";
@@ -151,16 +152,16 @@ namespace ChatLib.Twitch
             }
             catch (WebException ex)
             {
-                Console.WriteLine("Request failed due to \"{0}\"", ex.Message);
+                Log.Error(Src, "Request failed due to \"{0}\"", ex.Message);
                 return null;
             }
             catch (TimeoutException)
             {
-                Console.WriteLine("Request timed out.");
+                Log.Error(Src, "Request timed out.");
                 return null;
             }
 
-            IPEndPoint[] results = null;
+            List<IPEndPoint> results = new List<IPEndPoint>(3);
 
             // Reader owns base stream and will dispose it for us
             using (StreamReader reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
@@ -171,7 +172,6 @@ namespace ChatLib.Twitch
                 ServerList list = serial.Deserialize<ServerList>(jsonReader);
                 IList<string> serverList = isGroup ? list.Servers : list.ChatServers;
 
-                results = new IPEndPoint[serverList.Count];
                 for (int i = 0; i < serverList.Count; i++)
                 {
                     int portIndex = serverList[i].LastIndexOf(':');
@@ -179,21 +179,46 @@ namespace ChatLib.Twitch
                     string hostname = serverList[i].Remove(portIndex);
                     string portString = serverList[i].Substring(portIndex + 1);
 
-                    IPAddress hostAddress;
-                    int hostPort;
+                    IPAddress[] hostAddresses = new IPAddress[1];
+                    int hostPort = 0;
 
-                    if (!IPAddress.TryParse(hostname, out hostAddress) ||
-                        !int.TryParse(portString, out hostPort) ||
+                    // Attempt to parse as an IP address first, so we don't take a DNS
+                    //   hit every time we come across an IP address
+                    if (!IPAddress.TryParse(hostname, out hostAddresses[0]))
+                    {
+                        // It's probably a hostname, do a lookup
+                        try
+                        {
+                            IPHostEntry entry = Dns.GetHostEntry(hostname);
+                            hostAddresses = entry.AddressList;
+                            Log.Debug(Src, "Resolved {0} to {1} address(es)", hostname, hostAddresses.Length);
+                        }
+                        catch (SocketException)
+                        {
+                            // Bad host name
+                            continue;
+                        }
+                    }
+                    
+                    if (!int.TryParse(portString, out hostPort) ||
                         hostPort < 1 || hostPort > 65535)
+                    {
+                        // Bad port number
                         continue;
+                    }
 
-                    results[i] = new IPEndPoint(hostAddress, hostPort);
+                    // Add entries for all addresses of a host
+                    for (int p = 0; p < hostAddresses.Length; p++)
+                    {
+                        Log.Debug(Src, "Chat host: {0}:{1}", hostAddresses[p], hostPort);
+                        results.Add(new IPEndPoint(hostAddresses[p], hostPort));
+                    }
                 }
             }
 
             response.Close();
 
-            return results;
+            return results.ToArray();
         }
     }
 }

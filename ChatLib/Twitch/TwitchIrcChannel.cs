@@ -123,7 +123,7 @@ namespace ChatLib.Twitch
         {
             // Lookup which servers to connect to for this channel
             IPEndPoint[] servers = _service.GetChatServers(_channelName, false);
-            if(servers == null)
+            if (servers == null || servers.Length == 0)
             {
                 // Could not connect
                 RaiseOnLeave(LeaveReason.Error);
