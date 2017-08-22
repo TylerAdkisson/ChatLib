@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using ChatLib.Twitch;
 
 
 namespace ChatLib
@@ -25,6 +26,26 @@ namespace ChatLib
         {
             _serviceDict[id] = typeof(T);
         }
+		
+		/// <summary>
+        /// Registers all built-in chat services
+        /// </summary>
+		public static void RegisterBuiltinServices()
+		{
+			RegisterService<TwitchIrcService>("irc_twitch");
+		}
+		
+		/// <summary>
+        /// Returns a list of all registered chat service IDs
+        /// </summary>
+        /// <returns>An array of strings containing all registered chat service IDs</returns>
+		public static string[] GetRegisteredServices()
+		{
+			string[] ids = new string[_serviceDict.Keys.Count];
+			_serviceDict.Keys.CopyTo(ids, 0);
+			
+			return ids;
+		}
 
         /// <summary>
         /// Creates an instance of the service by the specified identifier
